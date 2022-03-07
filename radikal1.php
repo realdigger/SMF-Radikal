@@ -12,7 +12,7 @@
 
 // Настройки
 $downloadOnly = true; // Если true, только скачать файлы, не меняя ссылки в сообщениях
-$downloadFullsize = false;
+$downloadFullsize = false; // Заменять миниатюры на полноразмерные изображения
 //
 
 $counterUrls = 0;
@@ -73,10 +73,6 @@ $result = db_query(
 
 echo 'Найдено сообщений со ссылками: ' . mysql_num_rows($result) . $phpEOL;
 
-while ($row = mysql_fetch_assoc($request)) {
-}
-mysql_free_result($request);
-
 while ($row = mysql_fetch_assoc($result)) {
     $resultBody = db_query(
         "
@@ -108,20 +104,7 @@ while ($row = mysql_fetch_assoc($result)) {
             fwrite($log, $message . PHP_EOL);
         } elseif ($newUrl) {
             // Если файл успешно загружен, заменяем ссылку в сообщении на локальную
-            /*
-                        $smcFunc['db_query']('', '
-                                UPDATE {db_prefix}messages
-                                SET body = REPLACE(body, {string:old_url}, {string:new_url})
-                                WHERE id_msg = {int:id_msg}
-                                LIMIT 1',
-                                             [
-                                                 'id_msg' => $row['id_msg'],
-                                                 'old_url' => $url,
-                                                 'new_url' => $newUrl,
-                                             ]
-                        );
-            */
-            $resultBody = db_query(
+            db_query(
                 "
                     UPDATE {$db_prefix}messages
                     SET body = REPLACE(body, '" . $url . "', '" . $newUrl . "')
@@ -178,6 +161,7 @@ function processUrl($url, $msgId)
     $file = pathinfo($urlPath)['basename'];
     $dir = __DIR__ . '/radikal/' . $host . $path;
     @mkdir($dir, 0777, true);
+
 
     // Загружаем файл
     if (is_dir($dir) && downloadFile($url, $dir . '/' . $file, $msgId)) {
