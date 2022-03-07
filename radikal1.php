@@ -1,6 +1,6 @@
 <?php
 /**
- * @package Radikal importer
+ * @package Radikal importer for SMF1
  * @file radikal.php
  * @author digger <digger@mysmf.net> <https://mysmf.net>
  * @copyright Copyright (c) 2022, digger
@@ -152,13 +152,20 @@ if (!$cli) {
  */
 function processUrl($url, $msgId)
 {
-    global $boardurl, $log, $phpEOL;
+    global $boardurl, $log, $phpEOL, $downloadFullsize;
 
     $host = str_replace('.radikal.ru', '', strtolower(parse_url($url, PHP_URL_HOST)));
     $host = str_replace('radikal.ru', '000', $host);
     $urlPath = parse_url($url, PHP_URL_PATH);
     $path = pathinfo($urlPath)['dirname'];
     $file = pathinfo($urlPath)['basename'];
+
+    // Заменяем миниатюру на полноразмерную, если задано
+    if ($downloadFullsize) {
+        $file = str_replace('t.', '.', $file);
+        $url = str_replace('t.', '.', $url);
+    }
+
     $dir = __DIR__ . '/radikal/' . $host . $path;
     @mkdir($dir, 0777, true);
 
