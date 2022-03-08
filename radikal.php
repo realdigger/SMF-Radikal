@@ -73,10 +73,12 @@ $result = $smcFunc['db_query']('', '
                                []
 );
 
-echo 'Найдено сообщений со ссылками: ' . $smcFunc['db_num_rows'] ($result) . $phpEOL;
+$counterMessages = $smcFunc['db_num_rows'] ($result);
+echo 'Найдено сообщений со ссылками: ' . $counterMessages . $phpEOL;
 sleep(10);
 
 while ($row = $smcFunc['db_fetch_assoc']($result)) {
+    $counterMessages--;
     $resultBody = $smcFunc['db_query']('', '
 					SELECT body 
 					FROM {db_prefix}messages
@@ -101,7 +103,7 @@ while ($row = $smcFunc['db_fetch_assoc']($result)) {
         $newUrl = processUrl($url, $row['id_msg']);
         if ($newUrl && $downloadOnly) {
             // Только загружаем файлы, без замены сылок в сообщениях
-            $message = ' Сообщение #' . $row['id_msg'] . ' | ' . 'Ссылка будет заменена ' . $url . ' -> ' . $newUrl;
+            $message = ' ' . $counterMessages . ' | Сообщение #' . $row['id_msg'] . ' | ' . 'Ссылка будет заменена ' . $url . ' -> ' . $newUrl;
             echo $message . $phpEOL;
             fwrite($log, $message . PHP_EOL);
         } elseif ($newUrl) {
@@ -120,7 +122,7 @@ while ($row = $smcFunc['db_fetch_assoc']($result)) {
 
             // Если замена успешна
             if ($smcFunc['db_affected_rows']() != 0) {
-                $message = ' Сообщение #' . $row['id_msg'] . ' | ' . 'Ссылка заменена ' . $url . ' -> ' . $newUrl;
+                $message = ' ' . $counterMessages . ' | Сообщение #' . $row['id_msg'] . ' | ' . 'Ссылка заменена ' . $url . ' -> ' . $newUrl;
                 $counterUrls++;
             } else {
                 // Иначе ошибка
@@ -158,7 +160,7 @@ if (!$cli) {
  */
 function processUrl($url, $msgId)
 {
-    global $boardurl, $log, $phpEOL, $downloadFullsize;
+    global $boardurl, $log, $phpEOL, $downloadFullsize, $counterMessages;
 
     $host = str_replace('.radikal.ru', '', strtolower(parse_url($url, PHP_URL_HOST)));
     $host = str_replace('radikal.ru', '000', $host);
@@ -180,7 +182,7 @@ function processUrl($url, $msgId)
         return $boardurl . '/radikal/' . $host . $path . '/' . $file;
     }
 
-    $message = ' Сообщение #' . $msgId . ' | ' . $url . ' | ' . 'Ошибка сохранения файла';
+    $message = ' ' . $counterMessages . ' | Сообщение #' . $msgId . ' | ' . $url . ' | ' . 'Ошибка сохранения файла';
     echo $message . $phpEOL;
     fwrite($log, $message . PHP_EOL);
 
@@ -197,13 +199,13 @@ function processUrl($url, $msgId)
  */
 function downloadFile($url, $filePath, $msgId)
 {
-    global $phpEOL, $log;
+    global $phpEOL, $log, $counterMessages;
     $error = false;
 
     // Если уже загружен, пропускаем
     // TODO проверить что не битый
     if (file_exists($filePath)) {
-        $message = ' Сообщение #' . $msgId . ' | ' . $url . ' | ' . ' Уже загружен';
+        $message = ' ' . $counterMessages . ' | Сообщение #' . $msgId . ' | ' . $url . ' | ' . ' Уже загружен';
         echo $message . $phpEOL;
         fwrite($log, $message . PHP_EOL);
         return true;
@@ -228,7 +230,7 @@ function downloadFile($url, $filePath, $msgId)
     }
 
     // Записываем в лог про каждую ссылку
-    $message = ' Сообщение #' . $msgId . ' | ' . $url . ' | ' . $info['http_code'];
+    $message = ' ' . $counterMessages . ' | Сообщение #' . $msgId . ' | ' . $url . ' | ' . $info['http_code'];
     echo $message . $phpEOL;
     fwrite($log, $message . PHP_EOL);
 
