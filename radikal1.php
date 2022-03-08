@@ -52,7 +52,6 @@ if ($downloadFullsize) {
 }
 
 echo $phpEOL;
-sleep(10);
 
 // Проверяем наличие curl
 {
@@ -77,6 +76,7 @@ $result = db_query(
 );
 
 echo 'Найдено сообщений со ссылками: ' . mysql_num_rows($result) . $phpEOL;
+sleep(10);
 
 while ($row = mysql_fetch_assoc($result)) {
     $resultBody = db_query(

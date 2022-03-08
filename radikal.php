@@ -52,7 +52,6 @@ if ($downloadFullsize) {
 }
 
 echo $phpEOL;
-sleep(10);
 
 // Проверяем наличие curl
 {
@@ -75,6 +74,7 @@ $result = $smcFunc['db_query']('', '
 );
 
 echo 'Найдено сообщений со ссылками: ' . $smcFunc['db_num_rows'] ($result) . $phpEOL;
+sleep(10);
 
 while ($row = $smcFunc['db_fetch_assoc']($result)) {
     $resultBody = $smcFunc['db_query']('', '
