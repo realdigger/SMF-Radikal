@@ -196,6 +196,7 @@ function downloadFile($url, $filePath, $msgId)
     $error = false;
 
     // Если уже загружен, пропускаем
+    // TODO проверить что не битый
     if (file_exists($filePath)) {
         $message = ' Сообщение #' . $msgId . ' | ' . $url . ' | ' . ' Уже загружен';
         echo $message . $phpEOL;
@@ -207,6 +208,7 @@ function downloadFile($url, $filePath, $msgId)
     $curl = curl_init($url);
     curl_setopt($curl, CURLOPT_FILE, $file);
     curl_setopt($curl, CURLOPT_FOLLOWLOCATION, true);
+    curl_setopt($curl, CURLOPT_TIMEOUT, 10);
     curl_exec($curl);
 
     if (curl_error($curl)) {
