@@ -16,11 +16,13 @@ $downloadFullsize = false; // Если true, заменять миниатюры
 //$downloadBroken   = true;  // Если true, создавать пустые файлы вместо отсутствующих на фотохостинге, заглушек, ошибок сервера (повторных попыток скачать такие файлы делаться не будет). Если false, при каждом запуске будет заново пытаться скачать такие файлы.
 //
 
-$counterUrls      = 0;
-$counterUrlsFixed = 0;
-$counterTumbnails = 0;
-$logFile          = __DIR__ . '/radikal.log.' . date('Y-m-d') . '.txt';
-$cli              = php_sapi_name() == 'cli';
+$counterMessages       = 0; // Сообщений со ссылками
+$counterUrls           = 0; // Найдено ссылок
+$counterUrlsFixed      = 0; // Заменено ссылок
+$counterTumbnails      = 0; // Найдено ссылок на миниатюры
+$counterDownloadErrors = 0; // Ошибок загрузки файлов
+$logFile               = __DIR__ . '/radikal.log.' . date('Y-m-d') . '.txt';
+$cli                   = php_sapi_name() == 'cli';
 
 require_once(__DIR__ . '/Settings.php');
 require_once(__DIR__ . '/SSI.php');
@@ -148,7 +150,8 @@ $message = '
 *** Импорт завершен.
 *** Найдено ссылок: ' . $counterUrls . '
 *** Из них миниатюр: ' . $counterTumbnails . '
-*** Заменено в сообщениях: ' . $counterUrlsFixed;
+*** Заменено в сообщениях: ' . $counterUrlsFixed . '
+*** Ошибок загрузки файлов: ' . $counterDownloadErrors;;
 
 echo $phpEOL . $message . $phpEOL;
 fwrite($log, $message . PHP_EOL);
@@ -170,7 +173,7 @@ if (!$cli) {
  */
 function processUrl($url, $msgId)
 {
-    global $boardurl, $log, $phpEOL, $downloadFullsize, $counterMessages, $counterTumbnails;
+    global $boardurl, $log, $phpEOL, $downloadFullsize, $counterMessages, $counterTumbnails, $counterDownloadErrors;
 
     $host    = str_replace('.radikal.ru', '', strtolower(parse_url($url, PHP_URL_HOST)));
     $host    = str_replace('radikal.ru', '000', $host);
@@ -197,6 +200,7 @@ function processUrl($url, $msgId)
         return $boardurl . '/radikal/' . $host . $path . '/' . $file;
     }
 
+    $counterDownloadErrors++;
     $message = ' ' . $counterMessages . ' | Сообщение #' . $msgId . ' | ' . $url . ' | ' . 'Ошибка сохранения файла';
     echo $message . $phpEOL;
     fwrite($log, $message . PHP_EOL);
@@ -216,16 +220,16 @@ function downloadFile($url, $filePath, $msgId)
 {
     static $curl;
 
-    global $phpEOL, $log, $counterMessages;
+    global $phpEOL, $log, $counterMessages, $counterDownloadErrors;
     $error = false;
 
     // Если уже загружен, пропускаем
     // TODO проверить, что не битый
     if (file_exists($filePath)) {
         $message = ' ' . $counterMessages . ' | Сообщение #' . $msgId . ' | ' . $url . ' | ' . ' Уже загружен: ' . round(
-                filesize($filePath) / 1024 / 1024,
+                filesize($filePath) / 1024,
                 2
-            ) . ' Мб';
+            ) . ' Кб';
         echo $message . $phpEOL;
         fwrite($log, $message . PHP_EOL);
         return true;
@@ -256,6 +260,7 @@ function downloadFile($url, $filePath, $msgId)
     // Проверяем код ответа сервера
     if ($info['http_code'] !== 200 && $info['http_code'] !== 301 && $info['http_code'] !== 302) {
         $error = true;
+        $counterDownloadErrors++;
     }
 
     // Записываем в лог про каждую ссылку
