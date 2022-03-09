@@ -81,7 +81,9 @@ $result = $smcFunc['db_query']('', '
 );
 
 $counterMessages = $smcFunc['db_num_rows'] ($result);
-echo 'Найдено сообщений со ссылками: ' . $counterMessages++ . $phpEOL;
+$message = 'Найдено сообщений со ссылками: ' . $counterMessages++;
+echo $message . $phpEOL;
+fwrite($log, $message . PHP_EOL);
 sleep(10);
 
 while ($row = $smcFunc['db_fetch_assoc']($result)) {
