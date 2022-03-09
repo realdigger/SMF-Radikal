@@ -16,6 +16,8 @@ $downloadFullsize = false; // Если true, заменять миниатюры
 //
 
 $counterUrls = 0;
+$counterUrlsFixed = 0;
+$counterTumbnails = 0;
 $logFile = __DIR__ . '/radikal.log.' . date('Y-m-d') . '.txt';
 $cli = php_sapi_name() == 'cli';
 
@@ -81,15 +83,15 @@ sleep(10);
 
 while ($row = $smcFunc['db_fetch_assoc']($result)) {
     $counterMessages--;
-    $resultBody = $smcFunc['db_query']('', '
+    $resultBody = @$smcFunc['db_query']('', '
 					SELECT body 
 					FROM {db_prefix}messages
 					WHERE id_msg = {int:id_msg}
 					LIMIT 1',
-                                       ['id_msg' => $row['id_msg']]
+                                        ['id_msg' => $row['id_msg']]
     );
 
-    $body = $smcFunc['db_fetch_row']($resultBody)[0];
+    $body = @$smcFunc['db_fetch_row']($resultBody)[0];
     $smcFunc['db_free_result']($resultBody);
 
     // Находим все изображения с Radikal в этом сообщении
@@ -102,7 +104,9 @@ while ($row = $smcFunc['db_fetch_assoc']($result)) {
     }
 
     foreach ($matches['url'] as $url) {
+        $counterUrls++;
         $newUrl = processUrl($url, $row['id_msg']);
+
         if ($newUrl && $downloadOnly) {
             // Только загружаем файлы, без замены сылок в сообщениях
             $message = ' ' . $counterMessages . ' | Сообщение #' . $row['id_msg'] . ' | ' . 'Ссылка будет заменена ' . $url . ' -> ' . $newUrl;
@@ -125,7 +129,7 @@ while ($row = $smcFunc['db_fetch_assoc']($result)) {
             // Если замена успешна
             if ($smcFunc['db_affected_rows']() != 0) {
                 $message = ' ' . $counterMessages . ' | Сообщение #' . $row['id_msg'] . ' | ' . 'Ссылка заменена ' . $url . ' -> ' . $newUrl;
-                $counterUrls++;
+                $counterUrlsFixed++;
             } else {
                 // Иначе ошибка
                 $message = '[ERROR] Сообщение #' . $row['id_msg'] . ' | ' . 'Ошибка замены ссылки ' . $url . ' -> ' . $newUrl;
@@ -139,7 +143,12 @@ while ($row = $smcFunc['db_fetch_assoc']($result)) {
 
 $smcFunc['db_free_result']($result);
 
-$message = '*** Импорт завершен. Обработано ссылок: ' . $counterUrls;
+$message = '
+*** Импорт завершен.
+*** Найдено ссылок: ' . $counterUrls . '
+*** Из них миниатюр: ' . $counterTumbnails . '
+*** Заменено в сообщениях: ' . $counterUrlsFixed;
+
 echo $phpEOL . $message . $phpEOL;
 fwrite($log, $message . PHP_EOL);
 fclose($log);
@@ -160,13 +169,18 @@ if (!$cli) {
  */
 function processUrl($url, $msgId)
 {
-    global $boardurl, $log, $phpEOL, $downloadFullsize, $counterMessages;
+    global $boardurl, $log, $phpEOL, $downloadFullsize, $counterMessages, $counterTumbnails;
 
     $host = str_replace('.radikal.ru', '', strtolower(parse_url($url, PHP_URL_HOST)));
     $host = str_replace('radikal.ru', '000', $host);
     $urlPath = parse_url($url, PHP_URL_PATH);
     $path = pathinfo($urlPath)['dirname'];
     $file = pathinfo($urlPath)['basename'];
+
+    // Считаем миниатюры
+    if (strpos($file, 't.') !== false) {
+        $counterTumbnails++;
+    }
 
     // Заменяем миниатюру на полноразмерную, если задано
     if ($downloadFullsize) {
@@ -205,6 +219,7 @@ function downloadFile($url, $filePath, $msgId)
     $error = false;
 
     // Если уже загружен, пропускаем
+    // TODO проверить, что не битый
     if (file_exists($filePath)) {
         $message = ' ' . $counterMessages . ' | Сообщение #' . $msgId . ' | ' . $url . ' | ' . ' Уже загружен';
         echo $message . $phpEOL;
@@ -221,6 +236,7 @@ function downloadFile($url, $filePath, $msgId)
     curl_setopt($curl, CURLOPT_FILE, $file);
     curl_setopt($curl, CURLOPT_FOLLOWLOCATION, true);
     curl_setopt($curl, CURLOPT_TIMEOUT, 10);
+    curl_setopt($curl, CURLOPT_CONNECTTIMEOUT, 10);
     curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, false);
     curl_setopt($curl, CURLOPT_HEADER, false);
     curl_setopt($curl, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
@@ -246,9 +262,11 @@ function downloadFile($url, $filePath, $msgId)
     // curl_close($curl);
     fclose($file);
 
+    // TODO Проверять что скачалась не заглушка
     if (file_exists($filePath) && !$error) {
         return true;
     } else {
+        // TODO unlink $filePath
         return false;
     }
 }
