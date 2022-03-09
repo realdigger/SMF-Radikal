@@ -21,7 +21,7 @@ $cli = php_sapi_name() == 'cli';
 
 require_once(__DIR__ . '/Settings.php');
 require_once(__DIR__ . '/SSI.php');
-error_reporting(E_ALL & ~E_NOTICE);
+error_reporting(E_ALL);
 
 if ($cli) {
     $phpEOL = PHP_EOL;
@@ -46,6 +46,8 @@ echo '*** Импорт изображений с Radikal в SMF' . $phpEOL;
 echo '*** Обязательно сделайте бэкап таблицы smf_messages перед использованием скрипта!!!' . $phpEOL;
 if ($downloadOnly) {
     echo '*** Только загрузка файлов, без внесения изменений в сообщения' . $phpEOL;
+} else {
+    echo '*** Будут загружены файлы и заменены сылки в сообщениях' . $phpEOL;
 }
 if ($downloadFullsize) {
     echo '*** Миниатюры будут заменяться на полноразмерные изображения' . $phpEOL;
@@ -129,8 +131,6 @@ while ($row = $smcFunc['db_fetch_assoc']($result)) {
                 $message = '[ERROR] Сообщение #' . $row['id_msg'] . ' | ' . 'Ошибка замены ссылки ' . $url . ' -> ' . $newUrl;
             }
 
-
-            //$smcFunc['db_free_result']($resultUpdate);
             echo $message . $phpEOL;
             fwrite($log, $message . PHP_EOL);
         }
@@ -199,11 +199,12 @@ function processUrl($url, $msgId)
  */
 function downloadFile($url, $filePath, $msgId)
 {
+    static $curl;
+
     global $phpEOL, $log, $counterMessages;
     $error = false;
 
     // Если уже загружен, пропускаем
-    // TODO проверить что не битый
     if (file_exists($filePath)) {
         $message = ' ' . $counterMessages . ' | Сообщение #' . $msgId . ' | ' . $url . ' | ' . ' Уже загружен';
         echo $message . $phpEOL;
@@ -211,11 +212,19 @@ function downloadFile($url, $filePath, $msgId)
         return true;
     }
 
+    if (!$curl) {
+        $curl = curl_init();
+    }
+
     $file = fopen($filePath, 'w');
-    $curl = curl_init($url);
+    curl_setopt($curl, CURLOPT_URL, $url);
     curl_setopt($curl, CURLOPT_FILE, $file);
     curl_setopt($curl, CURLOPT_FOLLOWLOCATION, true);
-    curl_setopt($curl, CURLOPT_TIMEOUT, 30);
+    curl_setopt($curl, CURLOPT_TIMEOUT, 10);
+    curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, false);
+    curl_setopt($curl, CURLOPT_HEADER, false);
+    curl_setopt($curl, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
+
     curl_exec($curl);
 
     if (curl_error($curl)) {
@@ -234,7 +243,7 @@ function downloadFile($url, $filePath, $msgId)
     echo $message . $phpEOL;
     fwrite($log, $message . PHP_EOL);
 
-    curl_close($curl);
+    // curl_close($curl);
     fclose($file);
 
     if (file_exists($filePath) && !$error) {
