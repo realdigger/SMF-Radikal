@@ -11,15 +11,15 @@
  */
 
 // Настройки
-$downloadOnly = true; // Если true, только скачать файлы, не меняя ссылки в сообщениях
+$downloadOnly     = true;  // Если true, только скачать файлы, не меняя ссылки в сообщениях
 $downloadFullsize = false; // Если true, заменять миниатюры на полноразмерные изображения
 //
 
-$counterUrls = 0;
+$counterUrls      = 0;
 $counterUrlsFixed = 0;
 $counterTumbnails = 0;
-$logFile = __DIR__ . '/radikal.log.' . date('Y-m-d') . '.txt';
-$cli = php_sapi_name() == 'cli';
+$logFile          = __DIR__ . '/radikal.log.' . date('Y-m-d') . '.txt';
+$cli              = php_sapi_name() == 'cli';
 
 require_once(__DIR__ . '/Settings.php');
 require_once(__DIR__ . '/SSI.php');
@@ -95,7 +95,7 @@ while ($row = $smcFunc['db_fetch_assoc']($result)) {
     $smcFunc['db_free_result']($resultBody);
 
     // Находим все изображения с Radikal в этом сообщении
-    $pattern = '#(?P<url>https?:\/\/[^\.\/]*.?radikal.ru\/.+)[^\d\w\/\.]#iU';
+    $pattern      = '#(?P<url>https?:\/\/[^\.\/]*.?radikal.ru\/.+)[^\d\w\/\.]#iU';
     $matchesCount = preg_match_all($pattern, $body, $matches);
 
     // Нечего заменять
@@ -120,7 +120,7 @@ while ($row = $smcFunc['db_fetch_assoc']($result)) {
 					WHERE id_msg = {int:id_msg}
 					LIMIT 1',
                                  [
-                                     'id_msg' => $row['id_msg'],
+                                     'id_msg'  => $row['id_msg'],
                                      'old_url' => $url,
                                      'new_url' => $newUrl,
                                  ]
@@ -171,11 +171,11 @@ function processUrl($url, $msgId)
 {
     global $boardurl, $log, $phpEOL, $downloadFullsize, $counterMessages, $counterTumbnails;
 
-    $host = str_replace('.radikal.ru', '', strtolower(parse_url($url, PHP_URL_HOST)));
-    $host = str_replace('radikal.ru', '000', $host);
+    $host    = str_replace('.radikal.ru', '', strtolower(parse_url($url, PHP_URL_HOST)));
+    $host    = str_replace('radikal.ru', '000', $host);
     $urlPath = parse_url($url, PHP_URL_PATH);
-    $path = pathinfo($urlPath)['dirname'];
-    $file = pathinfo($urlPath)['basename'];
+    $path    = pathinfo($urlPath)['dirname'];
+    $file    = pathinfo($urlPath)['basename'];
 
     // Считаем миниатюры
     if (strpos($file, 't.') !== false) {
@@ -185,7 +185,7 @@ function processUrl($url, $msgId)
     // Заменяем миниатюру на полноразмерную, если задано
     if ($downloadFullsize) {
         $file = str_replace('t.', '.', $file);
-        $url = str_replace('t.', '.', $url);
+        $url  = str_replace('t.', '.', $url);
     }
 
     $dir = __DIR__ . '/radikal/' . $host . $path;
