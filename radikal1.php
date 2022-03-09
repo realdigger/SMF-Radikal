@@ -11,17 +11,22 @@
  */
 
 // Настройки
-$downloadOnly = true; // Если true, только скачать файлы, не меняя ссылки в сообщениях
+$downloadOnly     = true;  // Если true, только скачать файлы, не меняя ссылки в сообщениях
 $downloadFullsize = false; // Если true, заменять миниатюры на полноразмерные изображения
+//$downloadBroken   = true;  // Если true, создавать пустые файлы вместо отсутствующих на фотохостинге, заглушек, ошибок сервера (повторных попыток скачать такие файлы делаться не будет). Если false, при каждом запуске будет заново пытаться скачать такие файлы.
 //
 
-$counterUrls = 0;
-$logFile = __DIR__ . '/radikal.log.' . date('Y-m-d') . '.txt';
-$cli = php_sapi_name() == 'cli';
+$counterMessages       = 0; // Сообщений со ссылками
+$counterUrls           = 0; // Найдено ссылок
+$counterUrlsFixed      = 0; // Заменено ссылок
+$counterTumbnails      = 0; // Найдено ссылок на миниатюры
+$counterDownloadErrors = 0; // Ошибок загрузки файлов
+$logFile               = __DIR__ . '/radikal.log.' . date('Y-m-d') . '.txt';
+$cli                   = php_sapi_name() == 'cli';
 
 require_once(__DIR__ . '/Settings.php');
 require_once(__DIR__ . '/SSI.php');
-error_reporting(E_ALL & ~E_NOTICE);
+error_reporting(E_ALL);
 
 if ($cli) {
     $phpEOL = PHP_EOL;
@@ -46,6 +51,8 @@ echo '*** Импорт изображений с Radikal в SMF' . $phpEOL;
 echo '*** Обязательно сделайте бэкап таблицы smf_messages перед использованием скрипта!!!' . $phpEOL;
 if ($downloadOnly) {
     echo '*** Только загрузка файлов, без внесения изменений в сообщения' . $phpEOL;
+} else {
+    echo '*** Будут загружены файлы и заменены сылки в сообщениях' . $phpEOL;
 }
 if ($downloadFullsize) {
     echo '*** Миниатюры будут заменяться на полноразмерные изображения' . $phpEOL;
@@ -75,7 +82,10 @@ $result = db_query(
     __LINE__
 );
 
-echo 'Найдено сообщений со ссылками: ' . mysql_num_rows($result) . $phpEOL;
+$counterMessages = mysql_num_rows($result);
+$message         = 'Найдено сообщений со ссылками: ' . $counterMessages++;
+echo $message . $phpEOL;
+fwrite($log, $message . PHP_EOL);
 sleep(10);
 
 while ($row = mysql_fetch_assoc($result)) {
@@ -92,7 +102,7 @@ while ($row = mysql_fetch_assoc($result)) {
     mysql_free_result($resultBody);
 
     // Находим все изображения с Radikal в этом сообщении
-    $pattern = '#(?P<url>https?:\/\/[^\.\/]*.?radikal.ru\/.+)[^\d\w\/\.]#iU';
+    $pattern      = '#(?P<url>https?:\/\/[^\.\/]*.?radikal.ru\/.+)[^\d\w\/\.]#iU';
     $matchesCount = preg_match_all($pattern, $body, $matches);
 
     // Нечего заменять
@@ -101,10 +111,12 @@ while ($row = mysql_fetch_assoc($result)) {
     }
 
     foreach ($matches['url'] as $url) {
+        $counterUrls++;
         $newUrl = processUrl($url, $row['ID_MSG']);
+
         if ($newUrl && $downloadOnly) {
             // Только загружаем файлы, без замены сылок в сообщениях
-            $message = ' Сообщение #' . $row['ID_MSG'] . ' | ' . 'Ссылка будет заменена ' . $url . ' -> ' . $newUrl;
+            $message = ' ' . $counterMessages . ' | Сообщение #' . $row['ID_MSG'] . ' | ' . 'Ссылка будет заменена ' . $url . ' -> ' . $newUrl;
             echo $message . $phpEOL;
             fwrite($log, $message . PHP_EOL);
         } elseif ($newUrl) {
@@ -121,8 +133,8 @@ while ($row = mysql_fetch_assoc($result)) {
 
             // Если замена успешна
             if (db_affected_rows() != 0) {
-                $message = ' Сообщение #' . $row['ID_MSG'] . ' | ' . 'Ссылка заменена ' . $url . ' -> ' . $newUrl;
-                $counterUrls++;
+                $message = ' ' . $counterMessages . ' | Сообщение #' . $row['ID_MSG'] . ' | ' . 'Ссылка заменена ' . $url . ' -> ' . $newUrl;
+                $counterUrlsFixed++;
             } else {
                 // Иначе ошибка
                 $message = '[ERROR] Сообщение #' . $row['ID_MSG'] . ' | ' . 'Ошибка замены ссылки ' . $url . ' -> ' . $newUrl;
@@ -136,7 +148,13 @@ while ($row = mysql_fetch_assoc($result)) {
 
 mysql_free_result($result);
 
-$message = '*** Импорт завершен. Обработано ссылок: ' . $counterUrls;
+$message = '
+*** Импорт завершен.
+*** Найдено ссылок: ' . $counterUrls . '
+*** Из них миниатюр: ' . $counterTumbnails . '
+*** Заменено в сообщениях: ' . $counterUrlsFixed . '
+*** Ошибок загрузки файлов: ' . $counterDownloadErrors;;
+
 echo $phpEOL . $message . $phpEOL;
 fwrite($log, $message . PHP_EOL);
 fclose($log);
@@ -157,30 +175,35 @@ if (!$cli) {
  */
 function processUrl($url, $msgId)
 {
-    global $boardurl, $log, $phpEOL, $downloadFullsize;
+    global $boardurl, $log, $phpEOL, $downloadFullsize, $counterMessages, $counterTumbnails, $counterDownloadErrors;
 
-    $host = str_replace('.radikal.ru', '', strtolower(parse_url($url, PHP_URL_HOST)));
-    $host = str_replace('radikal.ru', '000', $host);
+    $host    = str_replace('.radikal.ru', '', strtolower(parse_url($url, PHP_URL_HOST)));
+    $host    = str_replace('radikal.ru', '000', $host);
     $urlPath = parse_url($url, PHP_URL_PATH);
-    $path = pathinfo($urlPath)['dirname'];
-    $file = pathinfo($urlPath)['basename'];
+    $path    = pathinfo($urlPath)['dirname'];
+    $file    = pathinfo($urlPath)['basename'];
+
+    // Считаем миниатюры
+    if (strpos($file, 't.') !== false) {
+        $counterTumbnails++;
+    }
 
     // Заменяем миниатюру на полноразмерную, если задано
     if ($downloadFullsize) {
         $file = str_replace('t.', '.', $file);
-        $url = str_replace('t.', '.', $url);
+        $url  = str_replace('t.', '.', $url);
     }
 
     $dir = __DIR__ . '/radikal/' . $host . $path;
     @mkdir($dir, 0777, true);
-
 
     // Загружаем файл
     if (is_dir($dir) && downloadFile($url, $dir . '/' . $file, $msgId)) {
         return $boardurl . '/radikal/' . $host . $path . '/' . $file;
     }
 
-    $message = ' Сообщение #' . $msgId . ' | ' . $url . ' | ' . 'Ошибка сохранения файла';
+    $counterDownloadErrors++;
+    $message = ' ' . $counterMessages . ' | Сообщение #' . $msgId . ' | ' . $url . ' | ' . 'Ошибка сохранения файла';
     echo $message . $phpEOL;
     fwrite($log, $message . PHP_EOL);
 
@@ -197,22 +220,37 @@ function processUrl($url, $msgId)
  */
 function downloadFile($url, $filePath, $msgId)
 {
-    global $phpEOL, $log;
+    static $curl;
+
+    global $phpEOL, $log, $counterMessages, $counterDownloadErrors;
     $error = false;
 
     // Если уже загружен, пропускаем
+    // TODO проверить, что не битый
     if (file_exists($filePath)) {
-        $message = ' Сообщение #' . $msgId . ' | ' . $url . ' | ' . ' Уже загружен';
+        $message = ' ' . $counterMessages . ' | Сообщение #' . $msgId . ' | ' . $url . ' | ' . ' Уже загружен: ' . round(
+                filesize($filePath) / 1024,
+                2
+            ) . ' Кб';
         echo $message . $phpEOL;
         fwrite($log, $message . PHP_EOL);
         return true;
     }
 
+    if (!$curl) {
+        $curl = curl_init();
+    }
+
     $file = fopen($filePath, 'w');
-    $curl = curl_init($url);
+    curl_setopt($curl, CURLOPT_URL, $url);
     curl_setopt($curl, CURLOPT_FILE, $file);
     curl_setopt($curl, CURLOPT_FOLLOWLOCATION, true);
-    curl_setopt($curl, CURLOPT_TIMEOUT, 30);
+    curl_setopt($curl, CURLOPT_TIMEOUT, 10);
+    curl_setopt($curl, CURLOPT_CONNECTTIMEOUT, 10);
+    curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, false);
+    curl_setopt($curl, CURLOPT_HEADER, false);
+    curl_setopt($curl, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
+
     curl_exec($curl);
 
     if (curl_error($curl)) {
@@ -224,15 +262,20 @@ function downloadFile($url, $filePath, $msgId)
     // Проверяем код ответа сервера
     if ($info['http_code'] !== 200 && $info['http_code'] !== 301 && $info['http_code'] !== 302) {
         $error = true;
+        $counterDownloadErrors++;
     }
 
     // Записываем в лог про каждую ссылку
-    $message = ' Сообщение #' . $msgId . ' | ' . $url . ' | ' . $info['http_code'];
+    $message = ' ' . $counterMessages . ' | Сообщение #' . $msgId . ' | ' . $url . ' | Ответ сервера: ' . $info['http_code'];
     echo $message . $phpEOL;
     fwrite($log, $message . PHP_EOL);
 
-    curl_close($curl);
+    // curl_close($curl);
     fclose($file);
+
+    // TODO Проверять что скачалась не заглушка
+    // Если файл пустой или html и не задано $downloadBroken, то
+    // unlink $filePath
 
     if (file_exists($filePath) && !$error) {
         return true;
