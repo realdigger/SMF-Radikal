@@ -13,6 +13,7 @@
 // Настройки
 $downloadOnly     = true;  // Если true, только скачать файлы, не меняя ссылки в сообщениях
 $downloadFullsize = false; // Если true, заменять миниатюры на полноразмерные изображения
+//$downloadBroken   = true;  // Если true, создавать пустые файлы вместо отсутствующих на фотохостинге, заглушек, ошибок сервера (повторных попыток скачать такие файлы делаться не будет). Если false, при каждом запуске будет заново пытаться скачать такие файлы.
 //
 
 $counterUrls      = 0;
@@ -221,7 +222,10 @@ function downloadFile($url, $filePath, $msgId)
     // Если уже загружен, пропускаем
     // TODO проверить, что не битый
     if (file_exists($filePath)) {
-        $message = ' ' . $counterMessages . ' | Сообщение #' . $msgId . ' | ' . $url . ' | ' . ' Уже загружен';
+        $message = ' ' . $counterMessages . ' | Сообщение #' . $msgId . ' | ' . $url . ' | ' . ' Уже загружен: ' . round(
+                filesize($filePath) / 1024 / 1024,
+                2
+            ) . ' Мб';
         echo $message . $phpEOL;
         fwrite($log, $message . PHP_EOL);
         return true;
@@ -255,7 +259,7 @@ function downloadFile($url, $filePath, $msgId)
     }
 
     // Записываем в лог про каждую ссылку
-    $message = ' ' . $counterMessages . ' | Сообщение #' . $msgId . ' | ' . $url . ' | ' . $info['http_code'];
+    $message = ' ' . $counterMessages . ' | Сообщение #' . $msgId . ' | ' . $url . ' | Ответ сервера: ' . $info['http_code'];
     echo $message . $phpEOL;
     fwrite($log, $message . PHP_EOL);
 
@@ -263,10 +267,12 @@ function downloadFile($url, $filePath, $msgId)
     fclose($file);
 
     // TODO Проверять что скачалась не заглушка
+    // Если файл пустой или html и не задано $downloadBroken, то
+    // unlink $filePath
+
     if (file_exists($filePath) && !$error) {
         return true;
     } else {
-        // TODO unlink $filePath
         return false;
     }
 }
